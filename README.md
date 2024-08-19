@@ -14,3 +14,4 @@ full css version
 
 /* Version 1.0 BETA */
 full completed handling and ready for beta testing.
+// All the db connection stuff is removed
