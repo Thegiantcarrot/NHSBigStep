@@ -119,9 +119,9 @@
 
         $host = "127.0.0.1";
         $port = 3306;
-        $dbname = "u529174437_Walking";
-        $username = "u529174437_Alexfife";
-        $password = "DCboy2019";
+        $dbname = "";
+        $username = "";
+        $password = "";
 
         // Create connection
         $conn = new mysqli($host, $username, $password, $dbname, $port);
