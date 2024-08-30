@@ -48,7 +48,7 @@ if ($current_time->format('Y-m-d') !== $last_updated_time->format('Y-m-d')) {
 
 // Handle profile update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
-    $new_steps_today = (int)($_POST['steps_today'] ?? 0);
+    $new_steps_today = (int)$_POST['steps_today'];
     $new_steps_for_day = $steps_today + $new_steps_today;
     $new_steps_total = $user['StepsInTotal'] + $new_steps_today;
 
@@ -60,17 +60,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     ");
     $current_time_str = $current_time->format('Y-m-d H:i:s');
     $stmt->bind_param("iiss", $new_steps_for_day, $new_steps_total, $current_time_str, $current_user);
+    
     if (!$stmt->execute()) {
         die("Error updating steps: " . $stmt->error);
     }
     $stmt->close();
 
     $_SESSION['message'] = "Profile updated successfully.";
+
+    // Redirect to the same page to reflect the updated values
     header("Location: profile.php");
     exit();
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -78,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profile</title>
     <link rel="stylesheet" type="text/css" href="styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/@pqina/flip/dist/flip.min.css">
     <style>
         body {
             margin: 0;
@@ -112,24 +115,105 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
             padding: 20px;
         }
 
-        .group-container {
-            border: 1px solid #ddd;
-            margin-bottom: 10px;
-            padding: 10px;
+        .tick {
+            font-size: 1rem;
+            white-space: nowrap;
+            font-family: Arial, sans-serif;
         }
 
-        .message {
-            color: green;
-            font-weight: bold;
+        .tick-flip, .tick-text-inline {
+            font-size: 2.5em;
         }
 
-        .error {
-            color: red;
-            font-weight: bold;
+        .tick-label {
+            margin-top: 1em;
+            font-size: 1em;
         }
+
+        .tick-char {
+            width: 1.5em;
+        }
+
+        .tick-text-inline {
+            display: inline-block;
+            text-align: center;
+            min-width: 1em;
+        }
+
+        .tick-text-inline + .tick-text-inline {
+            margin-left: -0.325em;
+        }
+
+        .tick-group {
+            margin: 0 .5em;
+            text-align: center;
+        }
+
+        body {
+            background-color: #fff !important;
+        }
+
+        .tick-text-inline {
+            color: #595d63 !important;
+        }
+
+        .tick-label {
+            color: #595d63 !important;
+        }
+
+        .tick-flip-panel {
+            color: #fff !important;
+        }
+
+        .tick-flip {
+            font-family: Arial, sans-serif !important;
+        }
+
+        .tick-flip-panel-text-wrapper {
+            line-height: 1.45 !important;
+        }
+
+        .tick-flip-panel {
+            background-color: rgb(25, 78, 176) !important;
+        }
+
+        .tick-flip {
+            border-radius: 0.17em !important;
+        }
+
+        .counter1 {
+            padding: 5px;
+            max-width: 30%;
+            max-height: 12%;
+            margin: 0 auto;
+            text-align: center;
+        }
+        /* Add this to your CSS file */
+.share-container {
+    margin-top: 20px;
+    text-align: center;
+}
+
+#share-btn {
+    background-color: #04AA6D;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+#share-btn:hover {
+    background-color: #039e5a;
+}
+
     </style>
 </head>
 <body>
+    <!-- Include Tick.js from CDN -->
+    <script src="https://unpkg.com/@pqina/flip/dist/flip.min.js"></script>
+
     <div class="topnav">
         <div class="nav-links">
             <a href="index.php">Home</a>
@@ -155,14 +239,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
 
         <h2>Profile Details</h2>
         <p>Username: <?php echo htmlspecialchars($user['Username']); ?></p>
-        <p>Total Steps: <?php echo htmlspecialchars($user['StepsInTotal']); ?></p>
+        <p>Steps Today:</p>
+        <div class="counter1">
+            <div id="tick" class="tick" data-value="<?php echo $steps_today; ?>" data-did-init="handleTickInit">
+                <span data-layout="horizontal fit">
+                    <span data-repeat="true" data-transform="arrive(200, .001) -> round -> split -> delay(rtl, 100, 150,)">
+                        <span data-view="flip"></span>
+                    </span>
+                </span>
+            </div>
+        </div>
 
         <h2>Update Steps</h2>
-        <form method="POST">
-            <input type="hidden" name="update_profile">
-            Steps Today: <input type="number" name="steps_today" value="<?php echo htmlspecialchars($steps_today); ?>" required><br>
+        <form id="update-steps-form" method="POST">
+            <input type="hidden" name="update_profile" value="1">
+            Steps Today: <input type="number" id="steps_today" name="steps_today" required><br>
             <input type="submit" value="Update Steps">
         </form>
     </div>
+    <!-- Add this within your HTML content where you want the button to appear -->
+<div class="share-container">
+    <button id="share-btn">Share My Steps</button>
+</div>
+
+
+    <script>
+document.addEventListener('DOMContentLoaded', function() {
+    var tickElement = document.querySelector('#tick');
+    var form = document.querySelector('#update-steps-form');
+    var stepsInput = document.querySelector('#steps_today');
+
+    // Check if the tickElement exists before proceeding
+    if (tickElement) {
+        // Initialize the Tick Flip object using the element's data-value attribute
+        var tick = Tick.DOM.create(tickElement, {
+            didInit: function(tickInstance) {
+                // Set initial value based on the data-value attribute
+                var initialValue = parseInt(tickElement.getAttribute('data-value'));
+                if (!isNaN(initialValue)) {
+                    tickInstance.value = initialValue;
+                } else {
+                    console.error("Initial value is not a valid number.");
+                }
+            }
+        });
+
+        // Form submit event listener
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Get the current value displayed in the tick element
+            var oldValue = parseInt(tickElement.getAttribute('data-value'));
+            var newSteps = parseInt(stepsInput.value);
+
+            if (!isNaN(oldValue) && !isNaN(newSteps)) {
+                var newValue = oldValue + newSteps;
+
+                // Update the data-value attribute to the new value
+                tickElement.setAttribute('data-value', newValue);
+
+                // Update the Tick instance value to trigger the flip animation
+                if (tick) {
+                    tick.value = newValue; // Trigger the animation
+                } else {
+                    console.error("Tick object is not defined.");
+                }
+
+                // Determine animation duration based on the length of the new value
+                var numberLength = newValue.toString().length;
+                var animationDuration = 700 + (numberLength * 500); // Base duration + duration per digit
+
+                // Wait for the animation to complete before submitting the form
+                setTimeout(function() {
+                    form.submit();
+                }, animationDuration); // Submit after animation completes
+            } else {
+                console.error("Invalid step values. Please ensure the values are numbers.");
+            }
+        });
+    } else {
+        console.error("Tick element not found.");
+    }
+});
+</script>
+<script>document.addEventListener('DOMContentLoaded', function() {
+    var shareButton = document.querySelector('#share-btn');
+    var stepsElement = document.querySelector('#tick');
+    
+    // Check if the share button and steps element exist before proceeding
+    if (shareButton && stepsElement) {
+        // Retrieve the steps value
+        var steps = parseInt(stepsElement.getAttribute('data-value')) || 0;
+
+        shareButton.addEventListener('click', function() {
+            var message = `I have just reached ${steps} steps with the NHS Big Step Challenge!`;
+
+            // Twitter sharing URL
+            var twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(message)}`;
+
+            // Facebook sharing URL
+            var facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(location.href)}&quote=${encodeURIComponent(message)}`;
+
+            // Open the sharing URL in a new window
+            window.open(twitterUrl, '_blank', 'width=600,height=400'); // Twitter share
+            // or use Facebook sharing
+            // window.open(facebookUrl, '_blank', 'width=600,height=400'); // Facebook share
+        });
+    } else {
+        console.error("Share button or steps element not found.");
+    }
+});
+</script>
 </body>
 </html>
